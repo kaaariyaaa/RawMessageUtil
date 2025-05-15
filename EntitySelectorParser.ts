@@ -25,7 +25,7 @@ interface HasItemFilter {
   location?: string;
   slot?: { min?: number; max?: number };
 }
-
+//test
 export class EntitySelector {
   private readonly selectorString: string;
   private readonly executionDimension: Dimension;
