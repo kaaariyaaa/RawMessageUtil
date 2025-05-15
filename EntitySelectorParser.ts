@@ -17,11 +17,6 @@ import {
   EntityQueryScoreOptions, // 追加: API標準のスコアオプション型
 } from "@minecraft/server";
 
-// HasItem のための拡張 (もし EntityQueryOptions に hasitem がない場合)
-// interface EntityQueryOptionsEx extends EntityQueryOptions {
-//   // hasitem など、将来的に追加するかもしれないカスタムオプション用
-// }
-
 // HasItem フィルターの条件 (これはカスタムのまま)
 interface HasItemFilter {
   item?: string;
@@ -221,18 +216,13 @@ export class EntitySelector {
               for (let i = 0; i < objStr.length; i++) {
                 const char = objStr[i];
                 if (char === "{") braceDepth++;
-                else if (char === "}") {
-                  braceDepth--;
-                  currentPair += char;
-                }
+                else if (char === "}") braceDepth--;
                 else if (char === "," && braceDepth === 0) {
                   assignments.push(currentPair.trim());
                   currentPair = "";
                   continue;
                 }
-                else {
-                  currentPair += char;
-                }
+                currentPair += char;
               }
               if (currentPair.trim()) assignments.push(currentPair.trim());
 
@@ -522,51 +512,6 @@ export class EntitySelector {
     // ただし、@s の場合は dimension.getEntities を使わないので、ここでチェックするか、
     // getEntities の @s ブロックで _matchesScoreFilters を呼ぶ必要がある。
     // → getEntities の @s ブロックで _matchesScoreFilters を呼ぶ方が明示的。
-    return true;
-  }
-
-  // _matchesScoreFilters は EntityQueryOptions.scoreOptions があるため不要になる想定だったが、
-  // @s の場合や、APIの getEntities が scoreOptions を期待通りに処理しない可能性を考慮し、
-  // カスタムフィルタとして残し、必要な箇所で呼び出す。
-  private _matchesScoreFilters(entity: Entity, scoreFilters: EntityQueryScoreOptions[]): boolean {
-    const scoreboardId = entity.scoreboardIdentity;
-    if (!scoreboardId) return false; // スコアを持てないエンティティは不一致
-
-    for (const filter of scoreFilters) {
-      // filter.exclude はここでは考慮しない (コマンドセレクタの scores には通常ないため)
-      // もし必要なら、filter.exclude が true の場合に条件を反転させるロジックを追加
-      try {
-        const objective = world.scoreboard.getObjective(filter.objective ?? ""); // Add null coalescing
-        if (!objective) return false; // 存在しない目的は不一致
-
-        const score = objective.getScore(scoreboardId); // スコアがない場合は undefined
-        if (score === undefined && (filter.minScore !== undefined || filter.maxScore !== undefined)) {
-          // スコアが存在しないが、範囲指定がある場合は不一致 (0点扱いとは異なる)
-          return false;
-        }
-        if (score === undefined && filter.minScore === undefined && filter.maxScore === undefined) {
-          // スコアが存在せず、範囲指定もない場合 (例: {objective=foo}) は、
-          // コマンドの挙動としては「そのobjectiveに何らかのスコアが設定されていればOK」となることが多い。
-          // ここでは、スコアがundefinedなら不一致とするのが安全か。
-          // または、minScore/maxScoreがundefinedの場合、スコアの存在自体を問うのであればtrueとするか。
-          // APIの EntityQueryScoreOptions の挙動に合わせるのがベスト。
-          // ここでは、スコアが存在しない場合は、minScore/maxScoreが指定されていれば確実にfalseとする。
-          // min/maxScore未指定で objective のみの場合の挙動は要確認。
-          // Minecraft wiki "Target selectors" によると、
-          // scores={foo=..} はfooにスコアを持つエンティティ、scores={foo=10} はfooが10のエンティティ。
-          // scores={foo=} はエラー。
-          // ここでは、スコアが存在しない場合は常に不一致としておくのが無難。
-          return false;
-        }
-        if (score !== undefined) {
-          // スコアが存在する場合のみ min/max を評価
-          if (filter.minScore !== undefined && score < filter.minScore) return false;
-          if (filter.maxScore !== undefined && score > filter.maxScore) return false;
-        }
-      } catch (e) {
-        return false;
-      }
-    }
     return true;
   }
 
